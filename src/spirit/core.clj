@@ -88,7 +88,21 @@
                           (cql/where (= :session_id session-id))))]
     (if (empty? session)
       false
-      session)))
+      (first session))))
+
+(defn get-user-from-session [session-id]
+  (let
+      [user
+       (deref (cql/select (cql/join (cql/table db :users)
+                                    (cql/project (cql/table db :sessions) [])
+                                    (cql/where (= :users.id :sessions.user_id)))
+                          (cql/where (= :sessions.session_id
+                                        session-id))))]
+    (if (empty? user)
+      false
+      (first user))))
+
+(get-user-from-session tmp)
 
 (get-session tmp)
 
