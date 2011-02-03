@@ -4,5 +4,9 @@
                  [org.clojure/clojure-contrib "1.2.0"]
                  [clojureql "1.0.0"]
                  [postgresql/postgresql "8.4-701.jdbc4"]
-                 [jbcrypt "0.3"]]
-  :dev-dependencies [[swank-clojure "1.2.1"]])
+                 [jbcrypt "0.3"]
+                 [ring/ring-core "0.2.0"]
+                 [ring/ring-jetty-adapter "0.2.0"]
+                 [clout "0.4.0"]]
+  :dev-dependencies [[swank-clojure "1.2.1"]
+                     [ring/ring-devel "0.2.0"]])
