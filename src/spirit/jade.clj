@@ -6,7 +6,8 @@
    ring.middleware.reload
    ring.middleware.stacktrace
    clout.core
-   clojure.string))
+   clojure.string)
+  (:import (org.mortbay.jetty.security SslSocketConnector)))
 
 ;; Util functions, put me in utils!
 (defn find-first [pred col]
@@ -73,23 +74,26 @@
      :doc-info (build-handler-docs
                 name match doc-description return-description verb-list auth param-list)}))
 
-(create-route-handler :spirit.users.user
-                      "Yay!"
-                      "Returns user map."
-                      '(:get)
-                      :auth-private
-                      '(user-name "Name of User")
-                      (fn [req params]
-                        (params :user-name)))
+(comment
+ (create-route-handler :spirit.users.user
+                       "Yay!"
+                       "Returns user map."
+                       '(:get)
+                       :auth-private
+                       '(user-name "Name of User")
+                       (fn [req params]
+                         (params :user-name)))
 
+ (define-web-api
+   "Returns a user given the name."
+   (:spirit.user "/spirit/user/:user-name") (:get) :auth-private [user-name]))
 
-(route-matches (generate-url :spirit.users.user '(user-name)))
 
 ;;Temp/test
 (defn handler [req]
   (let
       [ret
-       ((route-matches (str (generate-url :spirit.users.user '(user-name)) ".:ext") req) :ext)]
+       (str req)]
     (if ret
       {:status  200
        :headers {"Content-Type" "text/html"}
@@ -98,30 +102,26 @@
        :headers {"Content-Type" "text/html"}
        :body    "Resource Not Found."})))
 
-;; Autogenerate URL if missing, auth-private default.
-(define-web-api
-  "Returns a user given the name."
-  (:spirit.user "/spirit/user/:user-name") (:get) :auth-private [user-name])
-
-(defn handler [req]
-  (let
-      [ret
-       (find-first (fn [handler]
-                     (let [match
-                           (route-matches (handler :match) req)]
-                       (if match
-                         ((handler :handler)
-                          req
-                          match)
-                         false)))
-                   route-handlers)]
-    (if ret
-      {:status  200
-       :headers {"Content-Type" "text/html"}
-       :body    ret}
-      {:status  404
-       :headers {"Content-Type" "text/html"}
-       :body    "Resource Not Found."})))
+(comment
+ (defn handler [req]
+   (let
+       [ret
+        (find-first (fn [handler]
+                      (let [match
+                            (route-matches (handler :match) req)]
+                        (if match
+                          ((handler :handler)
+                           req
+                           match)
+                          false)))
+                    route-handlers)]
+     (if ret
+       {:status  200
+        :headers {"Content-Type" "text/html"}
+        :body    ret}
+       {:status  404
+        :headers {"Content-Type" "text/html"}
+        :body    "Resource Not Found."}))))
 
 (def app
   (-> #'handler
@@ -129,6 +129,17 @@
       (wrap-stacktrace)))
 
 (defn boot-jade []
-  (run-jetty app {:port conf/service-port}))
+  (run-jetty app {:configurator
+                  (fn [server]
+                    (def jade-server server))
+                  :port conf/service-port
+                  :ssl-port conf/ssl-service-port
+                  :keystore conf/ssl-keystore
+                  :key-password conf/ssl-key-password
 
-(boot-jade)
+                  :truststore conf/ssl-truststore
+                  :trust-password conf/ssl-trust-password}))
+
+;; (boot-jade)
+
+;; (.stop jade-server)
