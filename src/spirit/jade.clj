@@ -19,12 +19,7 @@
         (recur pred (next col))))))
 
 (def route-handlers
-  (list
-   {:match 
-    "/spirit/user/:user"
-    :handler
-    (fn [req params]
-      (params :user))}))
+  (atom ()))
 
 (defn filter-params [param-list]
   (filter symbol? param-list))
@@ -59,6 +54,19 @@
    :acceptted-verbs verb-list
    :required-authentication auth})
 
+(defn get-auth [request]
+  (if (= (request :scheme)
+         :https)
+    :auth-private
+    :auth-public))
+
+(defn compare-auth [request compare]
+  (or (= (get-auth request) :auth-public)
+      (= (get-auth request) compare)))
+
+(defn private-auth? [request]
+  (= (get-auth request) :auth-private))
+
 (defn create-route-handler [handler-desc doc-description return-description verb-list auth param-list handler-fun]
   (let
       [name (if (list? handler-desc)
@@ -71,57 +79,110 @@
      :match match
      :ext-match (str match ".:ext")
      :handler handler-fun
+     :auth auth ;; Check if valid!
      :doc-info (build-handler-docs
                 name match doc-description return-description verb-list auth param-list)}))
 
-(comment
- (create-route-handler :spirit.users.user
-                       "Yay!"
-                       "Returns user map."
-                       '(:get)
-                       :auth-private
-                       '(user-name "Name of User")
-                       (fn [req params]
-                         (params :user-name)))
+;; Currentlly will remove all matches with the same match string, regardless of verbs
+(defn add-route-handler [handler]
+  (swap! route-handlers
+         (fn [handlers] (cons handler
+                              (filter
+                               (fn [h]
+                                 (not= (h :name) (handler :name)))
+                               handlers)))))
 
- (define-web-api
-   "Returns a user given the name."
-   (:spirit.user "/spirit/user/:user-name") (:get) :auth-private [user-name]))
+(defmacro define-web-api [handler-desc doc-description return-description verb-list auth params & body]
+  (let* [handler (if (symbol? handler-desc)
+                   handler-desc
+                   `~handler-desc)
+         param-list (seq params)
+         params-var (gensym)
+         param-map (vec
+                    (apply concat
+                           (map
+                            (fn [param]
+                              `(~param (~params-var ~(keyword param))))
+                            (rest (filter-params param-list)))))]
+        `(add-route-handler
+          (create-route-handler ~handler ~doc-description ~return-description '~verb-list ~auth '~(rest param-list)
+                                (fn [~(first param-list) ~params-var]
+                                  (let ~param-map
+                                    ~@body))))))
 
 
-;;Temp/test
+(define-web-api :spirit.list
+   "Lists avaliable api calls."
+   "List of avaliable apis."
+   (:get)
+   :auth-public
+   [req]
+   (map
+    (fn [handler]
+      (filter
+       (fn [x] x) ;; not false
+       (if (compare-auth req (handler :auth))
+         {:api (handler :name)
+          :url (handler :match)}
+         false)))
+    (deref route-handlers)))
+
+(define-web-api :spirit.help
+                "Prints documentation for an api call."
+                "Api documentation."
+                (:get)
+                :auth-public
+                [api-call "Api function to lookup help for."])
+
+(create-route-handler :spirit.users.user
+                      "Yay!"
+                      "Returns user map."
+                      '(:get)
+                      :auth-private
+                      '(user-name "Name of User")
+                      (fn [req params]
+                        (params :user-name)))
+
+(define-web-api
+  "Returns a user given the name."
+  (:spirit.user "/spirit/user/:user-name") (:get) :auth-private [user-name])
+
+
+;; Autogenerate URL if missing, auth-private default.
+(define-web-api
+  "Returns a user given the name."
+  (:spirit.user "/spirit/user/:user-name") (:get) :auth-private [user-name])
+
+(defn protocol-conversion [response ext]
+  (str response))
+
+(apply hash-map [:ext "json"])
+
 (defn handler [req]
-  (let
-      [ret
-       (str req)]
+  (let*
+      [match
+       (find-first (fn [handler]
+                     (let [match
+                           (or
+                            (route-matches (handler :ext-match) req)
+                            (route-matches (handler :match) req))]
+                       (if match
+                         {:handler handler
+                          :match match}
+                         false)))
+                   (deref route-handlers))
+       ret (if match
+             (((match :handler) :handler)
+              req
+              (match :match))
+             false)]
     (if ret
       {:status  200
        :headers {"Content-Type" "text/html"}
-       :body    ret}
+       :body    (protocol-conversion ret ((match :match) :ext))}
       {:status  404
        :headers {"Content-Type" "text/html"}
        :body    "Resource Not Found."})))
-
-(comment
- (defn handler [req]
-   (let
-       [ret
-        (find-first (fn [handler]
-                      (let [match
-                            (route-matches (handler :match) req)]
-                        (if match
-                          ((handler :handler)
-                           req
-                           match)
-                          false)))
-                    route-handlers)]
-     (if ret
-       {:status  200
-        :headers {"Content-Type" "text/html"}
-        :body    ret}
-       {:status  404
-        :headers {"Content-Type" "text/html"}
-        :body    "Resource Not Found."}))))
 
 (def app
   (-> #'handler
