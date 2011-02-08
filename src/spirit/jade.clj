@@ -131,14 +131,18 @@
 (defn boot-jade []
   (run-jetty app {:configurator
                   (fn [server]
+                    ;; Taken from jerry.clj, so we can add setNeedClientAuth
+                    (let [ssl-connector (SslSocketConnector.)]
+                      (doto ssl-connector
+                        (.setPort conf/ssl-service-port)
+                        (.setKeystore conf/ssl-keystore)
+                        (.setKeyPassword conf/ssl-key-password)
+                        (.setTruststore conf/ssl-truststore)
+                        (.setTrustPassword conf/ssl-trust-password)
+                        (.setNeedClientAuth true))
+                      (.addConnector server ssl-connector))
                     (def jade-server server))
-                  :port conf/service-port
-                  :ssl-port conf/ssl-service-port
-                  :keystore conf/ssl-keystore
-                  :key-password conf/ssl-key-password
-
-                  :truststore conf/ssl-truststore
-                  :trust-password conf/ssl-trust-password}))
+                  :port conf/service-port}))
 
 ;; (boot-jade)
 
