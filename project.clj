@@ -7,6 +7,7 @@
                  [jbcrypt "0.3"]
                  [ring/ring-core "0.2.0"]
                  [ring/ring-jetty-adapter "0.2.0"]
-                 [clout "0.4.0"]]
+                 [clout "0.4.0"]
+                 [org.danlarkin/clojure-json "1.2-SNAPSHOT"]]
   :dev-dependencies [[swank-clojure "1.2.1"]
                      [ring/ring-devel "0.2.0"]])

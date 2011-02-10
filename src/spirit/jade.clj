@@ -1,6 +1,9 @@
 (ns spirit.jade
   (:require
-   [spirit.config :as conf])
+   [spirit.config :as conf]
+   [org.danlarkin (json :as json)]
+   [clojure.xml :as xml]
+   [clojure.contrib.string :as string])
   (:use
    ring.adapter.jetty
    ring.middleware.reload
@@ -51,7 +54,7 @@
                                    (keyword s)
                                    s))
                                param-list))
-   :acceptted-verbs verb-list
+   :accepted-verbs verb-list
    :required-authentication auth})
 
 (defn get-auth [request]
@@ -128,35 +131,47 @@
     (deref route-handlers)))
 
 (define-web-api :spirit.help
-                "Prints documentation for an api call."
-                "Api documentation."
-                (:get)
-                :auth-public
-                [api-call "Api function to lookup help for."])
+  "Prints documentation for an api call."
+  "Api documentation."
+  (:get)
+  :auth-public
+  [req api-call "Api function to lookup help for."]
+  (find-first
+   (fn [handler]
+     (if (= (keyword (string/replace-char \: \. api-call)) (handler :name))
+       (handler :doc-info)))
+   (deref route-handlers)))
 
-(create-route-handler :spirit.users.user
-                      "Yay!"
-                      "Returns user map."
-                      '(:get)
-                      :auth-private
-                      '(user-name "Name of User")
-                      (fn [req params]
-                        (params :user-name)))
+(define-web-api :spirit.hello
+  "Says Hi"
+  "The phrase 'Hello, [Name]'"
+  (:get)
+  :auth-public
+  [req name "Name to say hello too."]
+  (str "Hello, " name))
 
-(define-web-api
-  "Returns a user given the name."
-  (:spirit.user "/spirit/user/:user-name") (:get) :auth-private [user-name])
+(comment
+ (create-route-handler :spirit.users.user
+                       "Yay!"
+                       "Returns user map."
+                       '(:get)
+                       :auth-private
+                       '(user-name "Name of User")
+                       (fn [req params]
+                         (params :user-name))))
 
-
-;; Autogenerate URL if missing, auth-private default.
-(define-web-api
-  "Returns a user given the name."
-  (:spirit.user "/spirit/user/:user-name") (:get) :auth-private [user-name])
+(comment
+ (define-web-api
+   "Returns a user given the name."
+   (:spirit.user "/spirit/user/:user-name") (:get) :auth-private [user-name]))
 
 (defn protocol-conversion [response ext]
-  (str response))
-
-(apply hash-map [:ext "json"])
+  (case ext
+        "json" (json/encode response)
+        "clj" (str (if (= clojure.lang.LazySeq (class response))
+                     (seq response)
+                     response))
+        (json/encode response)))
 
 (defn handler [req]
   (let*
@@ -204,6 +219,7 @@
                       (.addConnector server ssl-connector))
                     (def jade-server server))
                   :port conf/service-port}))
+
 
 ;; (boot-jade)
 
