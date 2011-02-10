@@ -64,7 +64,7 @@
     :auth-public))
 
 (defn compare-auth [request compare]
-  (or (= (get-auth request) :auth-public)
+  (or (= compare :auth-public)
       (= (get-auth request) compare)))
 
 (defn private-auth? [request]
@@ -120,15 +120,15 @@
    (:get)
    :auth-public
    [req]
-   (map
-    (fn [handler]
-      (filter
-       (fn [x] x) ;; not false
+   (filter
+    (fn [x] x) ;; not false
+    (map
+     (fn [handler]
        (if (compare-auth req (handler :auth))
-         {:api (handler :name)
+         {:api (string/replace-char \. \: (name (handler :name)))
           :url (handler :match)}
-         false)))
-    (deref route-handlers)))
+         false))
+     (deref route-handlers))))
 
 (define-web-api :spirit.help
   "Prints documentation for an api call."
@@ -138,8 +138,10 @@
   [req api-call "Api function to lookup help for."]
   (find-first
    (fn [handler]
-     (if (= (keyword (string/replace-char \: \. api-call)) (handler :name))
-       (handler :doc-info)))
+     (if (compare-auth req (handler :auth))
+       (if (= (keyword (string/replace-char \: \. api-call)) (handler :name))
+         (handler :doc-info))
+      false))
    (deref route-handlers)))
 
 (define-web-api :spirit.hello
