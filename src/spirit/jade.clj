@@ -1,8 +1,9 @@
 (ns spirit.jade
   (:require
    [spirit.config :as conf]
+   [spirit.xml]
    [org.danlarkin (json :as json)]
-   [clojure.xml :as xml]
+   [clojure.contrib.lazy-xml :as xml]
    [clojure.contrib.string :as string])
   (:use
    ring.adapter.jetty
@@ -167,13 +168,20 @@
    "Returns a user given the name."
    (:spirit.user "/spirit/user/:user-name") (:get) :auth-private [user-name]))
 
+(defn json-safe-encode [response]
+  (json/encode (if (or (seq? response)
+                       (vector? response))
+                 {:d response}
+                 response)))
+
 (defn protocol-conversion [response ext]
   (case ext
-        "json" (json/encode response)
+        "json" (json-safe-encode response)
         "clj" (str (if (= clojure.lang.LazySeq (class response))
                      (seq response)
                      response))
-        (json/encode response)))
+        "xml" (spirit.xml/render-xml response)
+        (json-safe-encode response)))
 
 (defn handler [req]
   (let*
@@ -195,7 +203,7 @@
              false)]
     (if ret
       {:status  200
-       :headers {"Content-Type" "text/html"}
+       :headers {"Content-Type" "text/xml"}
        :body    (protocol-conversion ret ((match :match) :ext))}
       {:status  404
        :headers {"Content-Type" "text/html"}
