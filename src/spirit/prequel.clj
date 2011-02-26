@@ -1,4 +1,6 @@
 (ns spirit.prequel
+  (:require
+   [clojure.contrib.sql :as sql])
   (:use
    clojure.string))
 
@@ -31,6 +33,8 @@
     keyword? (gen-syntax atom)
     symbol? \?
     atom))
+
+(declare gen-expr)
 
 (defn gen-simple-expr [expr]
   (str-expr
@@ -110,9 +114,15 @@
       (list expr)
       nil)))
 
-(get-query-variables '(select :* :from :users :where (= (lower x) (select :* :from :blah :where (= x y)))))
+(defmacro with-query-results [db res query & body]
+  `(sql/with-connection ~db
+     (sql/with-query-results ~res
+       ~(vec
+         (concat
+          (list
+           (gen-query-string query))
+          (get-query-variables query)))
+       ~@body)))
 
-(gen-query-string '(select :* :from :users :where (= (lower :users.login) (lower ?))))
-
-(gen-query-string '(select :* :from :users :where (and (= (lower :users.login) (select :* :from :x)) (= 3 (+ 1 (- 2 3))))))
-
+(macroexpand '(with-query-results db res (select :* :from :users :where (= (lower x) (select :* :from :blah :where (= x y))))
+                         (hai)))

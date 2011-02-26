@@ -13,8 +13,6 @@
    :user "spirit"
    :password conf/db-password})
 
-(first (deref (cql/table db :users)))
-
 ;; Check for unique violations.
 (defn create-user [username password email]
   (let [user
@@ -45,7 +43,6 @@
     (.nextBytes rand buf)
     buf))
 
-(bytes-to-hex-string (random-bytes 10))
 
 (defn bytes-to-hex-string [ary]
   (apply str (map (fn [n] (let [ret (Integer/toHexString (bit-and n 0xff))]
