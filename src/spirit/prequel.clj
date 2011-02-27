@@ -32,17 +32,29 @@
     symbol? \?
     atom))
 
+;; better conversion needed then (symbol (name ...))
+(defn statement? [expr]
+  (or
+   (and (symbol? expr)
+        (some #{expr} statements))
+   (and (keyword? expr)
+        (some #{(symbol (name expr))} statements))))
+
 (declare gen-expr)
 
 (defn gen-simple-expr [expr]
   (str-expr
-   (cons
-    (if (some #{(first expr)} statements)
+   (if (statement? (first expr))
+     (cons
       (gen-syntax (first expr))
-      (gen-expr (first expr)))
-    (map
-     gen-expr
-     (rest expr)))))
+      (map
+       gen-expr
+       (rest expr)))
+     (interpose
+      \,
+      (map
+       gen-expr
+       expr)))))
 
 (defn paren-wrap-expr [expr]
   (let [ret (gen-expr expr)]
@@ -62,7 +74,7 @@
   (apply str
          (concat
           (list fun)
-          (paren-wrap
+          (paren-wrap           
            (gen-simple-expr expr)))))
 
 (defn gen-query-string [expr]
@@ -91,8 +103,7 @@
           prefix-operators)
     (some #{expr}
           functions)
-    (some #{expr}
-          statements))))
+    (statement? expr))))
 
 (defn get-query-variables [expr]
   (if (seq? expr)
@@ -146,19 +157,16 @@
      nil))
 
 ;; Do something about these commas!
+;; Is commaing a list the default?
 (defmacro insert [db table values]
   `(exec-command ~db
                  (:insert :into ~(keyword table)
-                         ~@(interpose
-                            \,
-                            (map
-                             (fn [k]
-                               k)
-                             (keys values)))
-                         :values
-                         (~@(interpose
-                             \,
-                             (map
+                          (~@(map
+                              (fn [k]
+                                k)
+                              (keys values)))
+                          :values
+                          (~@(map
                               (fn [v]
                                 v)
-                              (vals values)))))))
+                              (vals values))))))
