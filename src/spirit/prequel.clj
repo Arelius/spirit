@@ -144,3 +144,21 @@
 (defmacro exec-command [db cmd]
   `(with-query-results ~db res# ~cmd
      nil))
+
+;; Do something about these commas!
+(defmacro insert [db table values]
+  `(exec-command ~db
+                 (:insert :into ~(keyword table)
+                         ~@(interpose
+                            \,
+                            (map
+                             (fn [k]
+                               k)
+                             (keys values)))
+                         :values
+                         (~@(interpose
+                             \,
+                             (map
+                              (fn [v]
+                                v)
+                              (vals values)))))))
