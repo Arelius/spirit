@@ -1,8 +1,6 @@
 (ns spirit.prequel
   (:require
-   [clojure.contrib.sql :as sql])
-  (:use
-   clojure.string))
+   [clojure.contrib.sql :as sql]))
 
 ;; IS NOT
 (def binary-operators
@@ -46,17 +44,6 @@
      gen-expr
      (rest expr)))))
 
-(defn gen-expr [expr]
-  (if (seq? expr)
-    (if (empty? (rest expr))
-      (gen-atom expr)
-     (condp (fn [f x] (some #{(first expr)} f)) (first expr)
-       binary-operators (paren-wrap-expr (gen-binary-op (first expr) (rest expr)))
-       prefix-operators (paren-wrap-expr (gen-simple-expr expr))
-       functions (gen-function (first expr) (rest expr))
-       (paren-wrap-expr (gen-simple-expr expr))))
-    (gen-atom expr)))
-
 (defn paren-wrap-expr [expr]
   (let [ret (gen-expr expr)]
     (paren-wrap ret)))
@@ -82,6 +69,17 @@
   (str
    (gen-simple-expr expr)
    \;))
+
+(defn gen-expr [expr]
+  (if (seq? expr)
+    (if (empty? (rest expr))
+      (gen-atom expr)
+     (condp (fn [f x] (some #{(first expr)} f)) (first expr)
+       binary-operators (paren-wrap-expr (gen-binary-op (first expr) (rest expr)))
+       prefix-operators (paren-wrap-expr (gen-simple-expr expr))
+       functions (gen-function (first expr) (rest expr))
+       (paren-wrap-expr (gen-simple-expr expr))))
+    (gen-atom expr)))
 
 (defn syntax-symbol? [expr]
   (and
@@ -114,15 +112,35 @@
       (list expr)
       nil)))
 
+;; Evaluate using some sort of prepared statement cache.
+
 (defmacro with-query-results [db res query & body]
   `(sql/with-connection ~db
-     (sql/with-query-results ~res
-       ~(vec
-         (concat
-          (list
-           (gen-query-string query))
-          (get-query-variables query)))
-       ~@body)))
+    (sql/with-query-results ~res
+      ~(vec
+        (concat
+         (list
+          (gen-query-string query))
+         (get-query-variables query)))
+      ~@body)))
 
-(macroexpand '(with-query-results db res (select :* :from :users :where (= (lower x) (select :* :from :blah :where (= x y))))
-                         (hai)))
+;; Watchout, this will resolve all results.
+(defmacro query-all-results [db query]
+  `(let [ret# (atom nil)]
+     (with-query-results ~db res# ~query
+       (swap!
+        ret#
+        (fn [r#] (doall res#))))
+     ret#))
+
+(defmacro query-first-result [db query]
+  `(let [ret# (atom nil)]
+     (with-query-results ~db res# ~query
+       (swap!
+        ret#
+        (fn [r#] (first res#))))
+     ret#))
+
+(defmacro exec-command [db cmd]
+  `(with-query-results ~db res# ~cmd
+     nil))
