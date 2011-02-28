@@ -3,15 +3,16 @@
    [spirit.config :as conf]
    [spirit.xml]
    [org.danlarkin (json :as json)]
-   [clojure.contrib.lazy-xml :as xml]
-   [clojure.contrib.string :as string])
+   [clojure.contrib.lazy-xml :as xml])
   (:use
    ring.adapter.jetty
    ring.middleware.reload
    ring.middleware.stacktrace
-   clout.core
-   clojure.string)
+   clout.core)
   (:import (org.mortbay.jetty.security SslSocketConnector)))
+
+(require '[clojure.contrib.string :as string :only (replace-char)])
+
 
 ;; Util functions, put me in utils!
 (defn find-first [pred col]
@@ -36,7 +37,7 @@
            (interpose
             "/"
             (concat
-             (split (name namespace) #"\.")
+             (clojure.string/split (name namespace) #"\.")
              (map
               (fn [param]
                 (str ":"
@@ -229,7 +230,6 @@
                       (.addConnector server ssl-connector))
                     (def jade-server server))
                   :port conf/service-port}))
-
 
 ;; (boot-jade)
 
