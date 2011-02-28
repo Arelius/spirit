@@ -1,6 +1,6 @@
 (ns spirit.core
   (:require
-   [clojureql.core :as cql]
+   [spirit.prequel :as pql]
    [clojure.contrib.sql :as sql]
    [spirit.config :as conf])
   (:import
@@ -15,34 +15,35 @@
 
 ;; Check for unique violations.
 (defn create-user [username password email]
-  (let [user
-        {:login username
-         :email email
-         :password (BCrypt/hashpw password (BCrypt/gensalt 12))}]
-   (cql/conj!
-    (cql/table db :users)
-    user)
-   user))
+  (let [hashpass (BCrypt/hashpw password (BCrypt/gensalt 12))]
+   (pql/insert
+    db
+    :users
+    {:login username
+     :email email
+     :password hashpass})))
 
 ;; Need to build case insensitive indicies?
 (defn get-user [username password]
   (let
       [user
-       (deref (cql/select (cql/table db :users)
-                          (cql/where (= (:lower :login) (:lower username)))))]
-    (if (empty? user)
-      false
+       (pql/query-first-result
+        db
+        (select :* :from :users :where (= (lower :login) (lower username))))]
+    (if user
       (if
-          (BCrypt/checkpw password ((first user) :password))
-        (first user)
-        false))))
+          (BCrypt/checkpw password (user :password))
+        user
+        false)
+      false)))
+
+;(create-user "test" "testpw" "testemail@not.here")
 
 (defn random-bytes [len]
   (let [rand (java.security.SecureRandom/getInstance "SHA1PRNG")
         buf (make-array Byte/TYPE len)]
     (.nextBytes rand buf)
     buf))
-
 
 (defn bytes-to-hex-string [ary]
   (apply str (map (fn [n] (let [ret (Integer/toHexString (bit-and n 0xff))]
@@ -67,46 +68,34 @@
 
 (defn create-session [user-id client-address]
   (let* [session-id (generate-session-id user-id client-address)
-         session
-         {:session_id
-          session-id
+         db-null nil]
+        (pql/insert
+         db
+         :sessions
+         {:session_id session-id
           :user_id user-id
           :client_address client-address
-          :expiration nil}]
-   (cql/conj!
-    (cql/table db :sessions)
-    session)
-   session-id))
+          :expiration db-null})
+        session-id))
 
 (defn get-session [session-id]
-  (let
-      [session
-       (deref (cql/select (cql/table db :sessions)
-                          (cql/where (= :session_id session-id))))]
-    (if (empty? session)
-      false
-      (first session))))
+  (pql/query-first-result
+   db
+   (select :* :from :sessions :where (= :session_id session-id))))
 
 (defn get-user-from-session [session-id]
-  (let
-      [user
-       (deref (cql/select (cql/join (cql/table db :users)
-                                    (cql/project (cql/table db :sessions) [])
-                                    (cql/where (= :users.id :sessions.user_id)))
-                          (cql/where (= :sessions.session_id
-                                        session-id))))]
-    (if (empty? user)
-      false
-      (first user))))
+  (pql/query-first-result
+   db
+   (select :users.* :from :users \, :sessions :where
+           (= :sessions.session_id session-id))))
 
-(get-user-from-session tmp)
 
-(get-session tmp)
+;(get-user-from-session tmp)
 
-(def tmp (create-session 4 "127.0.0.1"))
+;(def tmp (create-session 4 "127.0.0.1"))
 
-(generate-session-id 4 "127.0.0.1")
+;(generate-session-id 4 "127.0.0.1")
 
-(get-user "indy" "pass")
+;(get-user "indy" "pass")
 
 

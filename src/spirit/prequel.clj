@@ -82,6 +82,7 @@
    (gen-simple-expr expr)
    \;))
 
+;; Need to support strings, NIL!!
 (defn gen-expr [expr]
   (if (seq? expr)
     (if (empty? (rest expr))
@@ -142,7 +143,7 @@
        (swap!
         ret#
         (fn [r#] (doall res#))))
-     ret#))
+     (deref ret#)))
 
 (defmacro query-first-result [db query]
   `(let [ret# (atom nil)]
@@ -150,11 +151,14 @@
        (swap!
         ret#
         (fn [r#] (first res#))))
-     ret#))
+     (deref ret#)))
 
 (defmacro exec-command [db cmd]
-  `(with-query-results ~db res# ~cmd
-     nil))
+  `(sql/with-connection ~db
+     (sql/do-prepared
+      ~@(concat
+        (list (gen-query-string cmd))
+        `((list ~@(get-query-variables cmd)))))))
 
 ;; Do something about these commas!
 ;; Is commaing a list the default?
